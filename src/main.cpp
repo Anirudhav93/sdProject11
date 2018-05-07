@@ -229,7 +229,6 @@ int main() {
 
         if (event == "telemetry") {
           // j[1] is the data JSON object
-          //double car_x = j[1]["x"];
 
           	double car_x = j[1]["x"];
           	double car_y = j[1]["y"];
@@ -271,12 +270,11 @@ int main() {
           	}
 
 
-          	//find ref_v to use
-          	double closestDist_s = 100000;
-          	bool change_lanes = false;
+            //Slow down the car if vehicle is in front of it
+            double closestDist_s = 1000000;
           	for(int i = 0; i < sensor_fusion.size(); i++)
           	{
-          		//car is in my lane
+          		//car is on the correct range (3 lanes to the right of the yellow line)
           		float d = sensor_fusion[i][6];
           		if(d < (2+4*lane+2) && d > (2+4*lane-2) )
           		{
@@ -285,100 +283,27 @@ int main() {
           			double check_speed = sqrt(vx*vx+vy*vy);
           			double check_car_s = sensor_fusion[i][5];
           			check_car_s+=((double)prev_size*.02*check_speed);
-          			//check s values greater than mine and s gap
+          			//car ahead of us is too close
           			if((check_car_s > car_s) && ((check_car_s-car_s) < 30) && ((check_car_s-car_s) < closestDist_s ) )
           			{
 
           				closestDist_s = (check_car_s - car_s);
 
+                  //maintain atleast 20 distance to the car ahead
           				if((check_car_s-car_s) > 20)
           				{
 
           					//match that cars speed
           					ref_vel = check_speed*2.237;
-          					change_lanes = true;
           				}
           				else
           				{
           					//go slightly slower than the cars speed
           					ref_vel = check_speed*2.237-5;
-          					change_lanes = true;
-
           				}
           			}
-
-
           		}
           	}
-            /*
-          	//try to change lanes if too close to car in front
-          	if(change_lanes && ((next_wp-lane_change_wp)%map_waypoints_x.size() > 2))
-          	{
-          		bool changed_lanes = false;
-          		//first try to change to left lane
-          		if(lane != 0 && !changed_lanes)
-          		{
-          			bool lane_safe = true;
-          			for(int i = 0; i < sensor_fusion.size(); i++)
-          			{
-          				//car is in left lane
-          				float d = sensor_fusion[i][6];
-          				if(d < (2+4*(lane-1)+2) && d > (2+4*(lane-1)-2) )
-          				{
-          					double vx = sensor_fusion[i][3];
-          					double vy = sensor_fusion[i][4];
-          					double check_speed = sqrt(vx*vx+vy*vy);
-
-          					double check_car_s = sensor_fusion[i][5];
-          					check_car_s+=((double)prev_size*.02*check_speed);
-          					double dist_s = check_car_s-car_s;
-          					if(dist_s < 20 && dist_s > -20)
-          					{
-          						lane_safe = false;
-          					}
-          				}
-          			}
-          			if(lane_safe)
-          			{
-          				changed_lanes = true;
-          				lane -= 1;
-          				lane_change_wp = next_wp;
-          			}
-          		}
-          		//next try to change to right lane
-          		if(lane != 2 && !changed_lanes)
-          		{
-          			bool lane_safe = true;
-          			for(int i = 0; i < sensor_fusion.size(); i++)
-          			{
-          				//car is in right lane
-          				float d = sensor_fusion[i][6];
-          				if(d < (2+4*(lane+1)+2) && d > (2+4*(lane+1)-2) )
-          				{
-          					double vx = sensor_fusion[i][3];
-          					double vy = sensor_fusion[i][4];
-          					double check_speed = sqrt(vx*vx+vy*vy);
-
-          					double check_car_s = sensor_fusion[i][5];
-          					check_car_s+=((double)prev_size*.02*check_speed);
-          					double dist_s = check_car_s-car_s;
-          					if(dist_s < 20 && dist_s > -10)
-          					{
-          						lane_safe = false;
-          					}
-          				}
-          			}
-          			if(lane_safe)
-          			{
-          				changed_lanes = true;
-          				lane += 1;
-          				lane_change_wp = next_wp;
-          			}
-
-          		}
-
-          	}
-            */
 
             bool car_ahead = false;
             bool car_left = false;
@@ -417,32 +342,28 @@ int main() {
                 }
             }
 
-            // Behavior : Let's see what to do.
+            //act based on our findings
             double speed_diff = 0;
             const double MAX_SPEED = 49.5;
             const double MAX_ACC = .224;
-            if ( car_ahead ) { // Car ahead
-              if ( !car_left && lane > 0 ) {
-                // if there is no car left and there is a left lane.
+            if ( car_ahead )
+            { // Car ahead
+              //no car on the left and we are not on the left most lane
+              if ( !car_left && lane > 0 )
+              {
                 lane--; // Change lane left.
-              } else if ( !car_righ && lane != 2 ){
-                // if there is no car right and there is a right lane.
+              }
+              //no car on the right and we are on the right most lane
+              else if ( !car_righ && lane != 2 )
+              {
                 lane++; // Change lane right.
-              } else {
+              }
+              else
+              {
                 speed_diff -= MAX_ACC;
               }
             }
 
-            /*else {
-              if ( lane != 1 ) { // if we are not on the center lane.
-                if ( ( lane == 0 && !car_righ ) || ( lane == 2 && !car_left ) ) {
-                  lane = 1; // Back to center.
-                }
-              }
-             if ( ref_vel < MAX_SPEED ) {
-                speed_diff += MAX_ACC;
-              }
-            }*/
 
           	vector<double> ptsx;
           	vector<double> ptsy;
@@ -489,8 +410,8 @@ int main() {
           		double shift_x = ptsx[i]-ref_x;
           		double shift_y = ptsy[i]-ref_y;
 
-				ptsx[i] = (shift_x *cos(0-ref_yaw)-shift_y*sin(0-ref_yaw));
-				ptsy[i] = (shift_x *sin(0-ref_yaw)+shift_y*cos(0-ref_yaw));
+      				ptsx[i] = (shift_x *cos(0-ref_yaw)-shift_y*sin(0-ref_yaw));
+      				ptsy[i] = (shift_x *sin(0-ref_yaw)+shift_y*cos(0-ref_yaw));
 
           	}
 
