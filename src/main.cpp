@@ -360,6 +360,7 @@ int main() {
               }
               else
               {
+                //this situation should never arise, see if we can remove this.
                 speed_diff -= MAX_ACC;
               }
             }
